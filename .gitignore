@@ -1,0 +1,14 @@
+
+# Virtual environments
+interviewPy-env/
+venv/
+
+# Environment variables
+.env
+
+# Backup files
+*.bak
+
+# Audio files
+static/audio/
+tts_test.mp3 

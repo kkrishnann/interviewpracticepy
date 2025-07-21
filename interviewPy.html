@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grammar Practice App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 16px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            button {
+                width: 100%;
+                padding: 20px;
+                font-size: 18px;
+                touch-action: manipulation; /* Improves touch responsiveness */
+            }
+            
+            textarea {
+                min-height: 120px;
+                font-size: 18px; /* Larger text for mobile */
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .question-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 15px 25px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #2196F3;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background: #1976D2;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .answer-section {
+            margin: 20px 0;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .feedback {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f0f8ff;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .status.listening {
+            background: #ffeb3b;
+            color: #333;
+        }
+        
+        .status.processing {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .status.error {
+            background: #f44336;
+            color: white;
+        }
+
+        .status.success {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .api-setup {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Grammar Practice App</h1>
+        
+        <div class="api-setup">
+            <h3>Welcome to Grammar Practice</h3>
+            <p>🎯 This app helps you practice English grammar with voice recognition and AI feedback.</p>
+            <p>📝 <strong>How to use:</strong> Listen to the question, speak your answer, and get instant feedback!</p>
+            <p><small>✨ <strong>Powered by Claude AI</strong> - No API key needed, just start practicing!</small></p>
+        </div>
+
+        <div id="microphoneStatus" class="api-setup">
+            <h3>Microphone Status</h3>
+            <div id="micStatusText">Checking microphone access...</div>
+            <button id="testMicBtn" onclick="testMicrophone()" style="margin-top: 10px;">Test Microphone</button>
+        </div>
+        
+        <div class="question-section">
+            <h3>Question <span id="questionNumber">1</span> of <span id="totalQuestions">7</span></h3>
+            <p id="currentQuestion">Loading question...</p>
+        </div>
+        
+        <div class="controls">
+            <button id="repeatBtn" onclick="repeatQuestion()">🔊 Repeat Question</button>
+            <button id="startRecordingBtn" onclick="startRecording()">🎤 Start Recording</button>
+            <button id="stopRecordingBtn" onclick="stopRecording()" disabled>⏹️ Stop Recording</button>
+            <button id="nextBtn" onclick="nextQuestion()" disabled>Next Question ➡️</button>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div class="answer-section">
+            <label for="userAnswer">Your Answer:</label>
+            <textarea id="userAnswer" placeholder="Your spoken answer will appear here, or you can type directly..."></textarea>
+            
+            <!-- HONEYPOT FIELD: Hidden from humans, visible to bots -->
+            <input type="text" id="website" name="website" style="display: none !important; visibility: hidden !important; position: absolute !important; left: -9999px !important;" tabindex="-1" autocomplete="off">
+            
+            <button onclick="submitAnswer()">Submit Answer for Feedback</button>
+        </div>
+        
+        <div id="feedback" class="feedback" style="display: none;">
+            <h4>Claude's Feedback:</h4>
+            <div id="feedbackContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Grammar questions - easily editable
+        const grammarQuestions = [
+            {
+                question: "Use 'work' in the past perfect continuous tense to describe an action that was ongoing before your computer crashed.",
+                expectedTense: "past perfect continuous",
+                verb: "work"
+            },
+            {
+                question: "Use 'see' in the past perfect tense to describe her experience before yesterday.",
+                expectedTense: "past perfect",
+                verb: "see"
+            },
+            {
+                question: "Use 'discuss' in the present continuous tense to describe what they are doing right now.",
+                expectedTense: "present continuous",
+                verb: "discuss"
+            },
+            {
+                question: "Use 'start' in the past perfect tense to describe what happened before you arrived at the theater.",
+                expectedTense: "past perfect",
+                verb: "start"
+            },
+            {
+                question: "Use 'live' in the present perfect continuous tense to describe your time in Tokyo.",
+                expectedTense: "present perfect continuous",
+                verb: "live"
+            },
+            {
+                question: "Use 'have' in the past continuous tense to describe what you were doing when the power went out.",
+                expectedTense: "past continuous",
+                verb: "have"
+            },
+            {
+                question: "Use 'finish' in the present perfect tense to describe what the team has completed.",
+                expectedTense: "present perfect",
+                verb: "finish"
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let recognition;
+        let isRecording = false;
+
+        function setupSpeechRecognition() {
+            // Check if speech recognition is supported
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                showStatus('❌ Speech recognition is not supported in this browser. You can still type your answers!', 'error');
+                document.getElementById('startRecordingBtn').disabled = true;
+                document.getElementById('stopRecordingBtn').disabled = true;
+                document.getElementById('micStatusText').innerHTML = '❌ Speech recognition not supported in this browser.<br><strong>You can still use the app by typing your answers!</strong>';
+                return;
+            }
+
+            // Mobile-specific checks
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile) {
+                document.getElementById('micStatusText').innerHTML = '📱 Mobile device detected. Voice recording may work in Chrome, but you can always type your answers!';
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true; // Keep listening continuously
+            recognition.interimResults = true; // Show partial results while speaking
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+
+            // Increase timeout settings for longer pauses
+            if (recognition.serviceURI !== undefined) {
+                // Some browsers support these properties
+                recognition.grammars = null;
+            }
+
+            let finalTranscript = '';
+            let interimTranscript = '';
+            let silenceTimer = null;
+            const SILENCE_TIMEOUT = 3000; // 3 seconds of silence before auto-stop
+
+            recognition.onstart = function() {
+                showStatus('🎤 Listening... Speak your answer. I\'ll wait for pauses up to 3 seconds.', 'listening');
+                isRecording = true;
+                finalTranscript = '';
+                interimTranscript = '';
+                updateRecordingButtons();
+            };
+
+            recognition.onresult = function(event) {
+                interimTranscript = '';
+                
+                // Process all results
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                // Update the text area with current results
+                const fullText = finalTranscript + interimTranscript;
+                document.getElementById('userAnswer').value = fullText;
+                
+                // Reset the silence timer when we get new speech
+                if (silenceTimer) {
+                    clearTimeout(silenceTimer);
+                }
+                
+                // Start a new silence timer
+                silenceTimer = setTimeout(() => {
+                    if (isRecording) {
+                        recognition.stop();
+                        showStatus('✅ Recording completed (3 seconds of silence detected)', 'success');
+                    }
+                }, SILENCE_TIMEOUT);
+                
+                // Update status to show we're still listening
+                if (isRecording && finalTranscript.length > 0) {
+                    showStatus('🎤 Still listening... Continue speaking or wait 3 seconds to finish.', 'listening');
+                }
+            };
+
+            recognition.onerror = function(event) {
+                // Clear any pending silence timer
+                if (silenceTimer) {
+                    clearTimeout(silenceTimer);
+                }
+                
+                let errorMessage = 'Recording error: ';
+                switch(event.error) {
+                    case 'not-allowed':
+                        errorMessage += 'Microphone access denied. Please allow microphone access and try again.';
+                        document.getElementById('micStatusText').innerHTML = '❌ Microphone access denied.<br><strong>Fix:</strong> Click the microphone icon in your browser\'s address bar and allow access.';
+                        break;
+                    case 'no-speech':
+                        errorMessage += 'No speech detected after waiting. Please try speaking louder or closer to the microphone.';
+                        break;
+                    case 'audio-capture':
+                        errorMessage += 'No microphone found. Please check your microphone connection.';
+                        break;
+                    case 'network':
+                        errorMessage += 'Network error. Please check your internet connection.';
+                        break;
+                    case 'aborted':
+                        errorMessage += 'Recording was cancelled.';
+                        break;
+                    case 'bad-grammar':
+                        errorMessage += 'Speech recognition grammar error.';
+                        break;
+                    default:
+                        errorMessage += event.error;
+                }
+                showStatus('❌ ' + errorMessage, 'error');
+                isRecording = false;
+                updateRecordingButtons();
+            };
+
+            recognition.onend = function() {
+                // Clear any pending silence timer
+                if (silenceTimer) {
+                    clearTimeout(silenceTimer);
+                }
+                
+                isRecording = false;
+                updateRecordingButtons();
+                
+                // Clean up the final transcript
+                if (finalTranscript.trim().length > 0) {
+                    document.getElementById('userAnswer').value = finalTranscript.trim();
+                    if (!document.getElementById('status').textContent.includes('completed')) {
+                        showStatus('✅ Recording finished!', 'success');
+                        setTimeout(() => hideStatus(), 2000);
+                    }
+                }
+            };
+        }
+
+        function loadQuestion() {
+            const question = grammarQuestions[currentQuestionIndex];
+            document.getElementById('questionNumber').textContent = currentQuestionIndex + 1;
+            document.getElementById('currentQuestion').textContent = question.question;
+            document.getElementById('userAnswer').value = '';
+            document.getElementById('feedback').style.display = 'none';
+            
+            // Read question aloud automatically
+            setTimeout(() => repeatQuestion(), 500);
+            
+            // Enable/disable next button
+            document.getElementById('nextBtn').disabled = currentQuestionIndex >= grammarQuestions.length - 1;
+        }
+
+        function repeatQuestion() {
+            const question = grammarQuestions[currentQuestionIndex].question;
+            speak(question);
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                // Get available voices and prefer more natural ones
+                const voices = speechSynthesis.getVoices();
+                
+                // Try to find a high-quality voice (prefer neural/premium voices)
+                let preferredVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('neural') ||
+                    voice.name.toLowerCase().includes('premium') ||
+                    voice.name.toLowerCase().includes('enhanced') ||
+                    voice.name.toLowerCase().includes('natural')
+                );
+                
+                // If no premium voice, prefer female voices (often sound more natural)
+                if (!preferredVoice) {
+                    preferredVoice = voices.find(voice => 
+                        voice.name.toLowerCase().includes('female') ||
+                        voice.name.toLowerCase().includes('zira') ||
+                        voice.name.toLowerCase().includes('susan') ||
+                        voice.name.toLowerCase().includes('samantha')
+                    );
+                }
+                
+                // Fallback to any English voice
+                if (!preferredVoice) {
+                    preferredVoice = voices.find(voice => voice.lang.startsWith('en'));
+                }
+                
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                    console.log('Using voice:', preferredVoice.name);
+                }
+                
+                // More natural speech settings
+                utterance.rate = 0.9;    // Slightly slower (was 0.8)
+                utterance.pitch = 1.1;   // Slightly higher pitch (was 1)
+                utterance.volume = 0.8;  // Slightly quieter (was 1)
+                
+                // Add small pauses at punctuation for more natural flow
+                utterance.onboundary = function(event) {
+                    if (event.name === 'sentence') {
+                        // Small pause between sentences
+                        setTimeout(() => {}, 200);
+                    }
+                };
+                
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        async function startRecording() {
+            console.log('Start recording button clicked'); // Debug log
+            
+            if (!recognition) {
+                showStatus('❌ Speech recognition not available. Please check browser compatibility.', 'error');
+                return;
+            }
+            
+            if (isRecording) {
+                console.log('Already recording, ignoring click');
+                return;
+            }
+
+            try {
+                showStatus('🎤 Starting recording...', 'processing');
+                console.log('Starting speech recognition...');
+                
+                // Reset transcripts
+                document.getElementById('userAnswer').value = '';
+                
+                // Start speech recognition directly - it will handle permission requests
+                recognition.start();
+                console.log('Speech recognition start called');
+                
+            } catch (error) {
+                console.error('Error in startRecording:', error);
+                let errorMessage = 'Cannot start recording: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Microphone access denied. Please allow microphone access and try again.';
+                    document.getElementById('micStatusText').innerHTML = '❌ Microphone access denied.<br><strong>Fix:</strong> Please allow microphone access when prompted, or click the microphone icon in your browser\'s address bar.';
+                    document.getElementById('micStatusText').style.color = 'red';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No microphone found. Please check your microphone connection.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += 'Microphone not supported. Try using HTTPS or localhost.';
+                } else if (error.name === 'InvalidStateError') {
+                    errorMessage += 'Speech recognition is already running. Please wait a moment and try again.';
+                    // Try to stop and restart
+                    if (recognition) {
+                        recognition.stop();
+                        setTimeout(() => {
+                            if (!isRecording) {
+                                startRecording();
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    errorMessage += error.message || 'Unknown error occurred';
+                }
+                
+                showStatus('❌ ' + errorMessage, 'error');
+            }
+        }
+
+        function stopRecording() {
+            if (recognition && isRecording) {
+                recognition.stop();
+            }
+        }
+
+        function updateRecordingButtons() {
+            document.getElementById('startRecordingBtn').disabled = isRecording;
+            document.getElementById('stopRecordingBtn').disabled = !isRecording;
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+        async function checkMicrophonePermission() {
+            try {
+                if (navigator.permissions) {
+                    const permission = await navigator.permissions.query({ name: 'microphone' });
+                    updateMicrophoneStatus(permission.state);
+                    
+                    permission.onchange = function() {
+                        updateMicrophoneStatus(permission.state);
+                    };
+                } else {
+                    document.getElementById('micStatusText').innerHTML = '⚠️ Cannot check microphone permissions automatically.<br>Please test manually using the button below.';
+                }
+            } catch (error) {
+                document.getElementById('micStatusText').innerHTML = '⚠️ Cannot check microphone permissions.<br>Please test manually using the button below.';
+            }
+        }
+
+        function updateMicrophoneStatus(state) {
+            const statusDiv = document.getElementById('micStatusText');
+            const recordBtn = document.getElementById('startRecordingBtn');
+            
+            switch(state) {
+                case 'granted':
+                    statusDiv.innerHTML = '✅ Microphone access granted. You can use voice recording!';
+                    statusDiv.style.color = 'green';
+                    recordBtn.disabled = false;
+                    break;
+                case 'denied':
+                    statusDiv.innerHTML = '❌ Microphone access denied.<br><strong>Fix:</strong> Click the microphone icon in your browser\'s address bar and allow access, then refresh the page.';
+                    statusDiv.style.color = 'red';
+                    recordBtn.disabled = true;
+                    break;
+                case 'prompt':
+                    statusDiv.innerHTML = '⚠️ Microphone permission needed. Click "Test Microphone" to grant access.';
+                    statusDiv.style.color = 'orange';
+                    break;
+                default:
+                    statusDiv.innerHTML = '❓ Unknown microphone status. Please test manually.';
+                    statusDiv.style.color = 'gray';
+            }
+        }
+
+        async function testMicrophone() {
+            try {
+                showStatus('🔍 Testing microphone access...', 'processing');
+                
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Stop the stream immediately - we just wanted to test access
+                stream.getTracks().forEach(track => track.stop());
+                
+                showStatus('✅ Microphone test successful!', 'success');
+                document.getElementById('micStatusText').innerHTML = '✅ Microphone test successful! You can now use voice recording.';
+                document.getElementById('micStatusText').style.color = 'green';
+                document.getElementById('startRecordingBtn').disabled = false;
+                
+                setTimeout(() => hideStatus(), 3000);
+                
+            } catch (error) {
+                let errorMessage = 'Microphone test failed: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Permission denied. Please allow microphone access.';
+                    document.getElementById('micStatusText').innerHTML = '❌ Permission denied.<br><strong>Fix:</strong> Allow microphone access when prompted, or check your browser settings.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No microphone found. Please check your microphone connection.';
+                    document.getElementById('micStatusText').innerHTML = '❌ No microphone detected.<br><strong>Fix:</strong> Please connect a microphone and try again.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += 'Microphone not supported. Try using HTTPS or localhost.';
+                    document.getElementById('micStatusText').innerHTML = '❌ Microphone not supported.<br><strong>Fix:</strong> Try opening this page on HTTPS or localhost.';
+                } else {
+                    errorMessage += error.message;
+                    document.getElementById('micStatusText').innerHTML = '❌ Error: ' + error.message;
+                }
+                
+                document.getElementById('micStatusText').style.color = 'red';
+                showStatus('❌ ' + errorMessage, 'error');
+            }
+        }
+
+        async function submitAnswer() {
+            const userAnswer = document.getElementById('userAnswer').value.trim();
+            
+            if (!userAnswer) {
+                alert('Please provide an answer first.');
+                return;
+            }
+
+            showStatus('Getting feedback from Claude...', 'processing');
+
+            const currentQuestion = grammarQuestions[currentQuestionIndex];
+            // Send only question and userAnswer to backend
+            try {
+                const response = await fetch('/api/claude', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: currentQuestion.question,
+                        user_answer: userAnswer
+                    })
+                });
+
+                if (response.status === 429) {
+                    showStatus('\u274c Rate limit exceeded. Please try again later.', 'error');
+                    document.getElementById('feedbackContent').textContent = 'Too many requests. Please wait a moment before trying again.';
+                    document.getElementById('feedback').style.display = 'block';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const feedback = data.text;
+                const audioBase64 = data.audio_base64;
+                
+                document.getElementById('feedbackContent').textContent = feedback;
+                document.getElementById('feedback').style.display = 'block';
+                
+                // Play the audio if available
+                if (audioBase64) {
+                    // Option 1: Play automatically
+                    const audio = new Audio("data:audio/mp3;base64," + audioBase64);
+                    audio.play();
+
+                    // Option 2: Show audio controls (uncomment if you want a player)
+                    // let audioElem = document.getElementById('ttsPlayer');
+                    // if (!audioElem) {
+                    //     audioElem = document.createElement('audio');
+                    //     audioElem.id = 'ttsPlayer';
+                    //     audioElem.controls = true;
+                    //     document.body.appendChild(audioElem);
+                    // }
+                    // audioElem.src = "data:audio/mp3;base64," + audioBase64;
+                    // audioElem.style.display = 'block';
+                    // audioElem.play();
+                }
+                
+                hideStatus();
+            } catch (error) {
+                console.error('Error details:', error);
+                showStatus('Error getting feedback from Claude API', 'error');
+                
+                const errorFeedback = `Error connecting to Claude: ${error.message}. Please try again or contact support if the problem persists.`;
+                document.getElementById('feedbackContent').textContent = errorFeedback;
+                document.getElementById('feedback').style.display = 'block';
+            }
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < grammarQuestions.length - 1) {
+                currentQuestionIndex++;
+                loadQuestion();
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('totalQuestions').textContent = grammarQuestions.length;
+            loadQuestion();
+            checkMicrophonePermission();
+            setupSpeechRecognition();
+        });
+
+        // Keyboard navigation for accessibility
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey) {
+                switch(event.key) {
+                    case 'r':
+                        event.preventDefault();
+                        repeatQuestion();
+                        break;
+                    case ' ':
+                        event.preventDefault();
+                        if (isRecording) {
+                            stopRecording();
+                        } else {
+                            startRecording();
+                        }
+                        break;
+                    case 'n':
+                        event.preventDefault();
+                        if (!document.getElementById('nextBtn').disabled) {
+                            nextQuestion();
+                        }
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
