@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Grammar Practice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            color: #000000;
+            font-size: 24px;
+            line-height: 1.8;
+            text-align: center;
+        }
+        
+        .main-content {
+            padding: 30px 0;
+        }
+        
+        h1 {
+            font-size: 32px;
+            margin-bottom: 30px;
+        }
+        
+        .question-display {
+            margin: 40px 0;
+            padding: 30px;
+            background: #f8f9fa;
+            border: 3px solid #000000;
+            border-radius: 10px;
+            font-size: 26px;
+            font-weight: bold;
+            line-height: 1.6;
+        }
+        
+        .status-display {
+            margin: 30px 0;
+            padding: 20px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 10px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .listening {
+            background: #fff3cd;
+            color: #856404;
+            border: 3px solid #ffeaa7;
+        }
+        
+        .processing {
+            background: #cce5ff;
+            color: #004085;
+            border: 3px solid #99ccff;
+        }
+        
+        .feedback {
+            background: #d4edda;
+            color: #155724;
+            border: 3px solid #c3e6cb;
+        }
+        
+        .ready {
+            background: #e2e3e5;
+            color: #383d41;
+            border: 3px solid #ced4da;
+        }
+        
+        .large-button {
+            padding: 20px 40px;
+            font-size: 20px;
+            margin: 20px;
+            border: 3px solid #000000;
+            background: #ffffff;
+            color: #000000;
+            cursor: pointer;
+            border-radius: 10px;
+            min-width: 200px;
+        }
+        
+        .large-button:hover, .large-button:focus {
+            background: #000000;
+            color: #ffffff;
+            outline: 3px solid #007bff;
+        }
+        
+        .large-button:disabled {
+            background: #e9ecef;
+            color: #6c757d;
+            border-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .progress {
+            font-size: 20px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .hidden-answer {
+            position: absolute;
+            left: -10000px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+        
+        .audio-button {
+            background: #28a745;
+            color: white;
+            border: 3px solid #28a745;
+        }
+        
+        .audio-button:hover, .audio-button:focus {
+            background: #218838;
+            border-color: #218838;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content">
+        <h1>Simple Grammar Practice</h1>
+        
+        <div class="status-display ready" style="margin: 20px 0; font-size: 24px;">
+            Click anywhere to start, then just speak your answer. Say "Repeat" to repeat the question. Double click at any point to start questions again
+        </div>
+        
+        <div class="progress">
+            Question <span id="questionNumber">1</span> of <span id="totalQuestions">7</span>
+        </div>
+        
+        <div class="question-display" id="questionDisplay" aria-live="polite">
+            Loading question...
+        </div>
+        
+        <div class="status-display ready" id="statusDisplay" aria-live="assertive">
+            Click anywhere to start, then just speak your answer
+        </div>
+
+        <div>
+            <button class="large-button" onclick="startAnswering()" id="startButton">
+                Start Answering
+            </button>
+            <button class="large-button" onclick="repeatQuestion()" id="repeatButton">
+                Repeat Question
+            </button>
+        </div>
+        
+        <!-- Hidden textarea for answer (for form submission) -->
+        <textarea id="userAnswer" class="hidden-answer" aria-label="Your spoken answer"></textarea>
+        
+        <div id="audioControls"></div>
+    </div>
+
+    <script>
+        // Grammar questions
+        const grammarQuestions = [
+            {
+                question: "Use 'live' in the present perfect continuous tense to describe your time in Tokyo.",
+                expectedTense: "present perfect continuous",
+                verb: "live"
+            },
+            {
+                question: "Use 'work' in the past perfect continuous tense to describe an action that was ongoing before your computer crashed.",
+                expectedTense: "past perfect continuous",
+                verb: "work"
+            },
+            {
+                question: "Use 'see' in the past perfect tense to describe her experience before yesterday.",
+                expectedTense: "past perfect",
+                verb: "see"
+            },
+            {
+                question: "Use 'discuss' in the present continuous tense to describe what they are doing right now.",
+                expectedTense: "present continuous",
+                verb: "discuss"
+            },
+            {
+                question: "Use 'start' in the past perfect tense to describe what happened before you arrived at the theater.",
+                expectedTense: "past perfect",
+                verb: "start"
+            },
+            {
+                question: "Use 'have' in the past continuous tense to describe what you were doing when the power went out.",
+                expectedTense: "past continuous",
+                verb: "have"
+            },
+            {
+                question: "Use 'finish' in the present perfect tense to describe what the team has completed.",
+                expectedTense: "present perfect",
+                verb: "finish"
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let recognition;
+        let isRecording = false;
+        let hasStarted = false;
+        let currentAudio = null;
+
+        function updateStatus(message, type = 'ready') {
+            const statusDisplay = document.getElementById('statusDisplay');
+            statusDisplay.textContent = message;
+            statusDisplay.className = `status-display ${type}`;
+        }
+
+        function stopAllAudio() {
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+            }
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+            }
+        }
+
+        function speak(text, callback = null) {
+            stopAllAudio();
+            
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                const setVoiceAndSpeak = () => {
+                    const voices = speechSynthesis.getVoices();
+                    const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
+                    if (englishVoice) {
+                        utterance.voice = englishVoice;
+                    }
+                    
+                    utterance.rate = 0.7;  // Slower for clarity
+                    utterance.pitch = 1.0;
+                    utterance.volume = 1.0;
+                    
+                    if (callback) {
+                        utterance.onend = callback;
+                    }
+                    
+                    speechSynthesis.speak(utterance);
+                };
+                
+                if (speechSynthesis.getVoices().length === 0) {
+                    speechSynthesis.addEventListener('voiceschanged', setVoiceAndSpeak, { once: true });
+                } else {
+                    setVoiceAndSpeak();
+                }
+            } else if (callback) {
+                setTimeout(callback, 1000);
+            }
+        }
+
+        function loadQuestion() {
+            const question = grammarQuestions[currentQuestionIndex];
+            document.getElementById('questionNumber').textContent = currentQuestionIndex + 1;
+            document.getElementById('questionDisplay').textContent = question.question;
+            document.getElementById('userAnswer').value = '';
+            
+            // Clear audio controls
+            document.getElementById('audioControls').innerHTML = '';
+            
+            if (hasStarted) {
+                // Auto-read question after short delay
+                setTimeout(() => {
+                    readQuestion();
+                }, 500);
+            }
+        }
+
+        function readQuestion() {
+            const question = grammarQuestions[currentQuestionIndex].question;
+            updateStatus('Listening to question...', 'ready');
+            
+            speak(question, () => {
+                updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                // Auto-start listening after question is read - give users time to think
+                setTimeout(() => {
+                    if (!isRecording) {
+                        startAnswering();
+                    }
+                }, 1000);
+            });
+        }
+
+        function repeatQuestion() {
+            readQuestion();
+        }
+
+        function setupSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                updateStatus('Speech recognition not supported. Please type your answers.', 'ready');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            let finalTranscript = '';
+            let silenceTimer = null;
+            const SILENCE_TIMEOUT = 5000; // 5 seconds - give users time to pause and think
+
+            recognition.onstart = function() {
+                updateStatus('🎤 Listening... Speak your answer clearly', 'listening');
+                isRecording = true;
+                finalTranscript = '';
+                document.getElementById('startButton').disabled = true;
+            };
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                // Show what we're hearing in the status
+                const currentText = finalTranscript + interimTranscript;
+                if (currentText.trim()) {
+                    updateStatus(`🎤 Hearing: "${currentText.trim()}"`, 'listening');
+                }
+                
+                document.getElementById('userAnswer').value = finalTranscript + interimTranscript;
+                
+                // Reset silence timer
+                if (silenceTimer) clearTimeout(silenceTimer);
+                silenceTimer = setTimeout(() => {
+                    if (isRecording) {
+                        recognition.stop();
+                    }
+                }, SILENCE_TIMEOUT);
+            };
+
+            recognition.onend = function() {
+                if (silenceTimer) clearTimeout(silenceTimer);
+                isRecording = false;
+                document.getElementById('startButton').disabled = false;
+                
+                if (finalTranscript.trim().length > 0) {
+                    document.getElementById('userAnswer').value = finalTranscript.trim();
+                    updateStatus('Processing your answer...', 'processing');
+                    
+                    console.log('⏰ Setting timeout to auto-submit answer in 1 second');
+                    // Auto-submit after brief delay
+                    setTimeout(() => {
+                        console.log('⏰ Timeout fired, calling submitAnswer()');
+                        submitAnswer();
+                    }, 1000);
+                } else {
+                    updateStatus('No speech detected. Click "Start Answering" to try again.', 'ready');
+                }
+            };
+
+            recognition.onerror = function(event) {
+                isRecording = false;
+                document.getElementById('startButton').disabled = false;
+                updateStatus('Recording error. Click "Start Answering" to try again.', 'ready');
+            };
+        }
+
+        function startAnswering() {
+            if (!recognition) {
+                updateStatus('Speech recognition not available.', 'ready');
+                return;
+            }
+            
+            if (isRecording) return;
+
+            try {
+                stopAllAudio(); // Stop any ongoing speech
+                recognition.start();
+            } catch (error) {
+                updateStatus('Cannot start recording. Please try again.', 'ready');
+            }
+        }
+
+        async function submitAnswer() {
+            console.log('🎯 submitAnswer() called');
+            const userAnswer = document.getElementById('userAnswer').value.trim();
+            console.log('📝 User answer:', `"${userAnswer}"`);
+            
+            if (!userAnswer) {
+                console.log('❌ Empty answer, returning early');
+                updateStatus('No answer detected. Please try again.', 'ready');
+                return;
+            }
+
+            // If the user says 'repeat', repeat the question and do not submit
+            if (userAnswer.toLowerCase() === 'repeat') {
+                console.log('🔁 User said "repeat", repeating question');
+                const currentQuestion = grammarQuestions[currentQuestionIndex];
+                speak(currentQuestion.question, () => {
+                    updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                    // Auto-start listening after question is repeated - give users time to think
+                    setTimeout(() => {
+                        if (!isRecording) {
+                            startAnswering();
+                        }
+                    }, 3000);
+                });
+                return;
+            }
+
+            // Play 'Checking answer' TTS so user knows we're processing
+            speak('Checking answer');
+
+            updateStatus('Getting AI feedback...', 'processing');
+            const currentQuestion = grammarQuestions[currentQuestionIndex];
+            
+            console.log('🚀 Submitting answer:', userAnswer);
+            console.log('📝 Question:', currentQuestion.question);
+            
+            try {
+                console.log('📡 Making API request to /api/check_answer');
+                const response = await fetch('/api/check_answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: currentQuestion.question,
+                        user_answer: userAnswer
+                    })
+                });
+
+                console.log('📡 API response status:', response.status);
+                
+                if (!response.ok) {
+                    console.log('❌ API response not OK:', response.status, response.statusText);
+                    updateStatus('Error getting feedback. Please try again.', 'ready');
+                    return;
+                }
+
+                console.log('✅ Parsing response JSON...');
+                const data = await response.json();
+                console.log('📦 Received data:', data);
+                
+                const feedback = data.text;
+                const audioBase64 = data.audio_base64;
+                
+                if (!feedback) {
+                    console.log('❌ No feedback text in response');
+                    updateStatus('No feedback received. Please try again.', 'ready');
+                    return;
+                }
+                
+                // Show feedback and play audio
+                updateStatus('📢 ' + feedback, 'feedback');
+                
+                // Play feedback audio
+                if (audioBase64) {
+                    try {
+                        currentAudio = new Audio("data:audio/mp3;base64," + audioBase64);
+                        currentAudio.play().then(() => {
+                            currentAudio.onended = () => {
+                                // Auto-advance to next question after feedback
+                                setTimeout(() => {
+                                    nextQuestion();
+                                }, 2000);
+                            };
+                        }).catch(() => {
+                            // Fallback to speech synthesis
+                            speak(feedback, () => {
+                                setTimeout(() => {
+                                    nextQuestion();
+                                }, 2000);
+                            });
+                        });
+                    } catch (error) {
+                        // Fallback to speech synthesis
+                        speak(feedback, () => {
+                            setTimeout(() => {
+                                nextQuestion();
+                            }, 2000);
+                        });
+                    }
+                } else {
+                    // No audio, use speech synthesis
+                    speak(feedback, () => {
+                        setTimeout(() => {
+                            nextQuestion();
+                        }, 2000);
+                    });
+                }
+                
+            } catch (error) {
+                updateStatus('Error getting feedback. Please try again.', 'ready');
+            }
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < grammarQuestions.length - 1) {
+                currentQuestionIndex++;
+                loadQuestion();
+            } else {
+                // End of questions
+                updateStatus('🎉 All questions completed! Great job!', 'feedback');
+                speak('Congratulations! You have completed all grammar questions. Great job!');
+                
+                // Hide buttons since we're done
+                document.getElementById('startButton').style.display = 'none';
+                document.getElementById('repeatButton').textContent = 'Start Over';
+                document.getElementById('repeatButton').onclick = () => {
+                    currentQuestionIndex = 0;
+                    document.getElementById('startButton').style.display = 'inline-block';
+                    document.getElementById('repeatButton').onclick = repeatQuestion;
+                    document.getElementById('repeatButton').textContent = 'Repeat Question';
+                    loadQuestion();
+                };
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('totalQuestions').textContent = grammarQuestions.length;
+            loadQuestion();
+            setupSpeechRecognition();
+            
+            // Welcome message will be spoken after first click due to browser restrictions
+            
+            // Auto-start on first click anywhere
+            document.addEventListener('click', function enableAndStart() {
+                if (!hasStarted) {
+                    hasStarted = true;
+                    
+                    // Enable speech synthesis
+                    if (typeof speechSynthesis !== 'undefined') {
+                        speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+                    }
+                    
+                    // Play welcome audio file, then read question
+                    const welcomeAudio = new Audio('static/audio/welcome.mp3');
+                    welcomeAudio.onended = () => {
+                        setTimeout(() => {
+                            readQuestion();
+                        }, 1000);
+                    };
+                    welcomeAudio.onerror = () => {
+                        // Fallback to speech synthesis if file fails
+                        speak("Welcome. Just speak your answer after you hear the question. Say repeat to repeat the question. Double click at any point to restart questions. Starting with first question", () => {
+                            setTimeout(() => {
+                                readQuestion();
+                            }, 1000);
+                        });
+                    };
+                    welcomeAudio.play();
+                    
+                    document.removeEventListener('click', enableAndStart);
+                }
+            }, { once: true });
+            
+            // Double-click anywhere to restart current question
+            document.addEventListener('dblclick', function restartCurrentQuestion() {
+                // Stop any current recording or audio
+                if (recognition && isRecording) {
+                    recognition.stop();
+                }
+                stopAllAudio();
+                
+                // Make sure we're in started mode
+                hasStarted = true;
+                
+                // Update UI to ready state
+                document.getElementById('startButton').disabled = false;
+                
+                // Read current question again
+                setTimeout(() => {
+                    readQuestion();
+                }, 200);
+                
+                updateStatus('Double-click detected - restarting current question...', 'ready');
+            });
+        });
+    </script>
+</body>
+</html>

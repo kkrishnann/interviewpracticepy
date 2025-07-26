@@ -5,6 +5,27 @@ import requests
 import os
 from uuid import uuid4
 import base64
+from dotenv import load_dotenv
+import sys
+
+# Load environment variables from .env file
+# Try different paths to find .env file
+env_paths = [
+    '.env',  # Current directory
+    '/home/' + os.path.expanduser('~').split('/')[-1] + '/interviewpractivepython/.env',  # Absolute path
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')  # Same directory as app.py
+]
+
+env_loaded = False
+for env_path in env_paths:
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+        env_loaded = True
+        print(f"✅ Loaded .env from: {env_path}")
+        break
+
+if not env_loaded:
+    print("⚠️ No .env file found, using system environment variables")
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -12,15 +33,20 @@ CORS(app)  # Enable CORS for all routes
 # Configuration
 PORT = int(os.environ.get('PORT', 3000))
 CLAUDE_API_KEY = os.environ.get('CLAUDE_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
-# Debug: Check if API key is loaded
+# Debug: Check if API keys are loaded
 print(f"🔑 Claude API Key loaded: {'✅ Yes' if CLAUDE_API_KEY else '❌ No'}")
 if CLAUDE_API_KEY:
-    print(f"🔑 Key starts with: {CLAUDE_API_KEY[:15]}...")
+    print(f"🔑 Claude key starts with: {CLAUDE_API_KEY[:15]}...")
 else:
-    print("💡 Set environment variable: export CLAUDE_API_KEY=sk-ant-api03-your-key")
+    print("💡 Set environment variable: CLAUDE_API_KEY=sk-ant-api03-your-key")
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+print(f"🔑 OpenAI API Key loaded: {'✅ Yes' if OPENAI_API_KEY else '❌ No'}")
+if OPENAI_API_KEY:
+    print(f"🔑 OpenAI key starts with: {OPENAI_API_KEY[:15]}...")
+else:
+    print("💡 Set environment variable: OPENAI_API_KEY=sk-proj-your-key")
 
 # Remove all audio file/directory management. Only in-memory audio is used.
 def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
@@ -50,7 +76,7 @@ def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
 @app.route('/')
 def index():
     """Serve the main HTML file"""
-    return send_from_directory('.', 'grammar-practice.html')
+    return send_from_directory('.', 'interviewPy.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -60,9 +86,9 @@ def serve_static(filename):
     except FileNotFoundError:
         return jsonify({'error': 'File not found'}), 404
 
-@app.route('/api/claude', methods=['POST'])
-def claude_proxy():
-    """Proxy endpoint for Claude API - Uses environment variable API key ONLY"""
+@app.route('/api/check_answer', methods=['POST'])
+def check_answer():
+    """Check student's grammar answer using Claude AI"""
     try:
         print("Received request to Claude API")
         if not CLAUDE_API_KEY:
@@ -200,6 +226,48 @@ def tts_openai():
             return jsonify({'error': 'No text provided'}), 400
         audio_base64 = text_to_speech_openai(text)
         return jsonify({'audio_base64': audio_base64})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-audio', methods=['POST'])
+def generate_audio():
+    """
+    Generate audio file from text using OpenAI TTS
+    POST { "text": "your text" }
+    Returns: MP3 audio file directly
+    """
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        # Generate audio using same function as check_answer
+        if not OPENAI_API_KEY:
+            return jsonify({'error': 'OpenAI API key not configured'}), 503
+            
+        response = requests.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+            },
+            json={
+                "model": "gpt-4o-mini-tts",
+                "input": text,
+                "voice": "nova",
+                "instructions":
+                    "Use clear and slow delivery such that a non native speaker can follow along. Also make sure the tone is very positive and encouraging to help the student",
+                "response_format": "mp3"
+            },
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'OpenAI TTS error: {response.status_code}'}), 500
+        
+        # Return raw MP3 audio
+        return response.content, 200, {'Content-Type': 'audio/mpeg'}
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
