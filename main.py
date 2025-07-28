@@ -3,10 +3,8 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import os
-from uuid import uuid4
 import base64
 from dotenv import load_dotenv
-import sys
 
 # Load environment variables from .env file
 # Try different paths to find .env file
@@ -76,7 +74,7 @@ def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
 @app.route('/')
 def index():
     """Serve the main HTML file"""
-    return send_from_directory('.', 'interviewPy.html')
+    return send_from_directory('.', 'grammar-simple.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -115,14 +113,50 @@ def check_answer():
         if not question or not user_answer:
             print("❌ Missing question or user_answer in request")
             return jsonify({'error': 'Both question and user_answer are required'}), 400
-        # Construct prompt
-        prompt = f"""I'm helping a student practice grammar. Here's the question and their answer:\n\nQuestion: "{question}"
-Student's answer: "{user_answer}"
-\nPlease provide concise, encouraging feedback.\n- If the student's answer is correct, reply with a short confirmation only (no explanation needed).\n- If the answer is incorrect, briefly explain what was wrong and provide the correct answer.\n- Always keep your response as short and helpful as possible for a grammar learner."""
+        # Construct prompt - using string formatting to avoid f-string issues with curly braces
+        prompt = """I'm helping a student practice grammar. Here's the question and their answer:
+
+Question: "{}"
+Student's answer: "{}"
+
+Please provide:
+1. Concise, encouraging feedback on their answer
+2. Generate the next grammar question for continued practice
+
+For feedback:
+- If correct: short confirmation only (no explanation needed)
+- If incorrect: briefly explain what was wrong and provide the correct answer
+- Keep feedback encouraging and concise
+
+For the next question:
+- IMPORTANT: Test a DIFFERENT English tense from what was just asked. Cycle through these systematically in order:
+  1. Present simple (I work)
+  2. Present continuous (I am working) 
+  3. Present perfect (I have worked)
+  4. Present perfect continuous (I have been working)
+  5. Past simple (I worked)
+  6. Past continuous (I was working)
+  7. Past perfect (I had worked)
+  8. Past perfect continuous (I had been working)
+  9. Future simple (I will work)
+  10. Future continuous (I will be working)
+  11. Future perfect (I will have worked)
+  12. Future perfect continuous (I will have been working)
+- Use a different common verb (work, live, study, travel, cook, read, write, play, watch, etc.)
+- Keep the question concise and clear
+- Format: "Use '[verb]' in the [exact tense name] to describe [specific context]"
+- Make the context relatable and practical
+- Ensure you're testing a completely different tense structure than the previous question
+
+Return your response as valid JSON in this exact format:
+{{
+  "feedback": "your encouraging feedback here",
+  "next_question": "the new grammar question"
+}}""".format(question, user_answer)
         print(f"📝 Constructed prompt:\n{prompt}")
         # Prepare Claude API call
         model = 'claude-sonnet-4-20250514'
-        max_tokens = 300
+        max_tokens = 500
         claude_url = 'https://api.anthropic.com/v1/messages'
         headers = {
             'Content-Type': 'application/json',
@@ -156,21 +190,47 @@ Student's answer: "{user_answer}"
         # Return Claude's response
         claude_response = response.json()
         print("✅ Successfully got response from Claude API")
-        # Extract feedback text
-        feedback = None
+        # Extract response text
+        response_text = None
         if 'content' in claude_response and isinstance(claude_response['content'], list) and len(claude_response['content']) > 0:
-            feedback = claude_response['content'][0].get('text')
-        if not feedback:
-            print("❌ No feedback text in Claude response")
-            return jsonify({'error': 'No feedback text from Claude'}), 500
-        # Convert feedback to speech using OpenAI TTS (in memory)
+            response_text = claude_response['content'][0].get('text')
+        if not response_text:
+            print("❌ No response text in Claude response")
+            return jsonify({'error': 'No response text from Claude'}), 500
+        
+        print(f"📋 Claude response:\n{response_text}")
+        
+        # Parse JSON response from Claude
         try:
-            audio_base64 = text_to_speech_openai(feedback)
+            import json
+            claude_data = json.loads(response_text)
+            feedback = claude_data.get('feedback', '')
+            next_question = claude_data.get('next_question', '')
+        except json.JSONDecodeError as e:
+            print(f"❌ Failed to parse JSON from Claude: {e}")
+            # Fallback: use entire response as feedback
+            feedback = response_text
+            next_question = ""
+        
+        print(f"✅ Parsed feedback: {feedback}")
+        print(f"✅ Parsed next question: {next_question}")
+        
+        # Create combined text for TTS: feedback, pause, then next question
+        combined_text = feedback
+        if next_question:
+            combined_text += f". Next question: {next_question}"
+        
+        # Convert combined text to speech using OpenAI TTS (in memory)
+        try:
+            audio_base64 = text_to_speech_openai(combined_text)
         except Exception as tts_err:
             print(f"❌ OpenAI TTS error: {tts_err}")
             audio_base64 = None
+        
         return jsonify({
             'text': feedback,
+            'next_question': next_question,
+            'combined_text': combined_text,
             'audio_base64': audio_base64
         })
     except requests.exceptions.RequestException as e:
@@ -186,15 +246,6 @@ Student's answer: "{user_answer}"
             'error': 'Internal server error',
             'details': str(e)
         }), 500
-
-@app.route('/test-api-key')
-def test_api_key():
-    """Test endpoint to verify API key is loaded"""
-    return jsonify({
-        'api_key_set': bool(CLAUDE_API_KEY),
-        'api_key_length': len(CLAUDE_API_KEY) if CLAUDE_API_KEY else 0,
-        'api_key_starts_with': CLAUDE_API_KEY[:15] + '...' if CLAUDE_API_KEY else 'None'
-    })
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -213,76 +264,10 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/tts', methods=['POST'])
-def tts_openai():
-    """
-    Simple endpoint to test OpenAI TTS: POST { "text": "your text" }
-    Returns: { "audio_base64": ... }
-    """
-    try:
-        data = request.get_json()
-        text = data.get('text')
-        if not text:
-            return jsonify({'error': 'No text provided'}), 400
-        audio_base64 = text_to_speech_openai(text)
-        return jsonify({'audio_base64': audio_base64})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/generate-audio', methods=['POST'])
-def generate_audio():
-    """
-    Generate audio file from text using OpenAI TTS
-    POST { "text": "your text" }
-    Returns: MP3 audio file directly
-    """
-    try:
-        data = request.get_json()
-        text = data.get('text')
-        if not text:
-            return jsonify({'error': 'No text provided'}), 400
-        
-        # Generate audio using same function as check_answer
-        if not OPENAI_API_KEY:
-            return jsonify({'error': 'OpenAI API key not configured'}), 503
-            
-        response = requests.post(
-            "https://api.openai.com/v1/audio/speech",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-            },
-            json={
-                "model": "gpt-4o-mini-tts",
-                "input": text,
-                "voice": "nova",
-                "instructions":
-                    "Use clear and slow delivery such that a non native speaker can follow along. Also make sure the tone is very positive and encouraging to help the student",
-                "response_format": "mp3"
-            },
-            timeout=60
-        )
-        
-        if response.status_code != 200:
-            return jsonify({'error': f'OpenAI TTS error: {response.status_code}'}), 500
-        
-        # Return raw MP3 audio
-        return response.content, 200, {'Content-Type': 'audio/mpeg'}
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 if __name__ == '__main__':
     print("🚀 Grammar app Python backend starting...")
-    print(f"📝 Open http://localhost:{PORT}/grammar-practice.html to use the app")
+    print(f"📝 Open http://localhost:{PORT}/grammar-simple.html to use the app")
     print(f"🏥 Health check available at http://localhost:{PORT}/health")
-    print(f"🔧 API key test available at http://localhost:{PORT}/test-api-key")
-    
-    # Final check of API key
-    if CLAUDE_API_KEY:
-        print(f"✅ Claude API key configured (starts with: {CLAUDE_API_KEY[:15]}...)")
-    else:
-        print("❌ Claude API key NOT configured!")
-        print("💡 Set environment variable: export CLAUDE_API_KEY=sk-ant-api03-your-key")
     
     app.run(
         host='0.0.0.0',

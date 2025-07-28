@@ -450,6 +450,7 @@
                 console.log('📦 Received data:', data);
                 
                 const feedback = data.text;
+                const nextQuestion = data.next_question;
                 const audioBase64 = data.audio_base64;
                 
                 if (!feedback) {
@@ -461,39 +462,75 @@
                 // Show feedback and play audio
                 updateStatus('📢 ' + feedback, 'feedback');
                 
-                // Play feedback audio
+                // If we have a next question, update the current question
+                if (nextQuestion) {
+                    console.log('📝 Updating to next question:', nextQuestion);
+                    // Update the question display and internal data
+                    const newQuestionData = {
+                        question: nextQuestion,
+                        expectedTense: "dynamic",
+                        verb: "dynamic"
+                    };
+                    grammarQuestions[currentQuestionIndex] = newQuestionData;
+                    document.getElementById('questionDisplay').textContent = nextQuestion;
+                }
+                
+                // Play feedback + next question audio
                 if (audioBase64) {
                     try {
                         currentAudio = new Audio("data:audio/mp3;base64," + audioBase64);
                         currentAudio.play().then(() => {
                             currentAudio.onended = () => {
-                                // Auto-advance to next question after feedback
+                                // Auto-start listening for the new question after audio
                                 setTimeout(() => {
-                                    nextQuestion();
-                                }, 2000);
+                                    updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                                    setTimeout(() => {
+                                        if (!isRecording) {
+                                            startAnswering();
+                                        }
+                                    }, 1000);
+                                }, 1000);
                             };
                         }).catch(() => {
                             // Fallback to speech synthesis
-                            speak(feedback, () => {
+                            const combinedText = data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : ''));
+                            speak(combinedText, () => {
                                 setTimeout(() => {
-                                    nextQuestion();
-                                }, 2000);
+                                    updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                                    setTimeout(() => {
+                                        if (!isRecording) {
+                                            startAnswering();
+                                        }
+                                    }, 1000);
+                                }, 1000);
                             });
                         });
                     } catch (error) {
                         // Fallback to speech synthesis
-                        speak(feedback, () => {
+                        const combinedText = data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : ''));
+                        speak(combinedText, () => {
                             setTimeout(() => {
-                                nextQuestion();
-                            }, 2000);
+                                updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                                setTimeout(() => {
+                                    if (!isRecording) {
+                                        startAnswering();
+                                    }
+                                }, 1000);
+                            }, 1000);
                         });
                     }
                 } else {
                     // No audio, use speech synthesis
-                    speak(feedback, () => {
+                    const combinedText = data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : ''));
+                    speak(combinedText, () => {
                         setTimeout(() => {
-                            nextQuestion();
-                        }, 2000);
+                            updateStatus('Say your answer now, or click "Start Answering"', 'ready');
+                            setTimeout(() => {
+                                if (!isRecording) {
+                                    startAnswering();
+                                }
+                            }, 1000);
+                        }, 1000);
                     });
                 }
                 
