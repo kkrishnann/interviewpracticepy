@@ -73,14 +73,31 @@ def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
 
 @app.route('/')
 def index():
+    print("routing in / ")
     """Serve the main HTML file"""
     return send_from_directory('.', 'grammar-simple.html')
 
+@app.route('/api/weather',methods=['GET','POST'])
+def show_weather_report():
+    if request.method == 'POST':
+        data = request.get_json()
+        zip_code = data.get('zip')
+    else:
+        zip_code = request.args.get('zip')
+    
+    print(f"getting weather report for {zip_code}")
+    return jsonify({
+        'zip': zip_code,
+        'weather': 'Nice and Sunny'
+    })
+
+
 @app.route('/<path:filename>')
 def serve_static(filename):
+    print(f"routing in serve_static :{filename}")
     """Serve static files"""
     try:
-        return send_from_directory('.', filename)
+        return send_from_directory('./static', filename)
     except FileNotFoundError:
         return jsonify({'error': 'File not found'}), 404
 

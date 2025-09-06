@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather</title>
+</head>
+<body>
+    <input type="text" id="zip" placeholder="Enter zip code">
+    <button onclick="getWeather()">Submit</button>
+    <div id="response"></div>
+    
+    <script>
+        function getWeather() {
+            const zip = document.getElementById('zip').value;
+            fetch('/api/weather', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ zip: zip })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('response').innerHTML = JSON.stringify(data);
+                });
+        }
+    </script>
+</body>
+</html>
