@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preposition Practice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            color: #000000;
+            font-size: 24px;
+            line-height: 1.8;
+            text-align: center;
+        }
+        .main-content { padding: 30px 0; }
+        h1 { font-size: 32px; margin-bottom: 30px; }
+        .question-display {
+            margin: 40px 0;
+            padding: 30px;
+            background: #f8f9fa;
+            border: 3px solid #000000;
+            border-radius: 10px;
+            font-size: 26px;
+            font-weight: bold;
+            line-height: 1.6;
+        }
+        .status-display {
+            margin: 30px 0;
+            padding: 20px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 10px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .listening { background: #fff3cd; color: #856404; border: 3px solid #ffeaa7; }
+        .processing { background: #cce5ff; color: #004085; border: 3px solid #99ccff; }
+        .feedback { background: #d4edda; color: #155724; border: 3px solid #c3e6cb; }
+        .ready { background: #e2e3e5; color: #383d41; border: 3px solid #ced4da; }
+        .large-button {
+            padding: 20px 40px; font-size: 20px; margin: 20px; border: 3px solid #000000; background: #ffffff; color: #000000; cursor: pointer; border-radius: 10px; min-width: 200px;
+        }
+        .large-button:hover, .large-button:focus { background: #000000; color: #ffffff; outline: 3px solid #007bff; }
+        .large-button:disabled { background: #e9ecef; color: #6c757d; border-color: #6c757d; cursor: not-allowed; }
+        .progress { font-size: 20px; margin: 20px 0; font-weight: bold; }
+        .hidden-answer { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+        .audio-button { background: #28a745; color: white; border: 3px solid #28a745; }
+        .audio-button:hover, .audio-button:focus { background: #218838; border-color: #218838; color: white; }
+    </style>
+</head>
+<body>
+    <div class="main-content">
+        <h1>Preposition Practice</h1>
+
+        <div class="status-display ready" style="margin: 20px 0; font-size: 24px;">
+            Click anywhere to start, then just speak your answer. Say "Repeat" to repeat the question. Double click at any point to start questions again
+        </div>
+
+        <div class="progress" style="display: none;">
+            Question <span id="questionNumber">1</span> of <span id="totalQuestions">7</span>
+        </div>
+
+        <div class="question-display" id="questionDisplay" aria-live="polite">Loading question...</div>
+
+        <div class="status-display ready" id="statusDisplay" aria-live="assertive">
+            Click anywhere to start, then just speak your answer
+        </div>
+
+        <div>
+            <button class="large-button" id="startButton">Start Answering</button>
+            <button class="large-button" id="repeatButton">Repeat Question</button>
+        </div>
+
+        <textarea id="userAnswer" class="hidden-answer" aria-label="Your spoken answer"></textarea>
+        <div id="audioControls"></div>
+
+        <div style="margin-top: 24px;">
+            <a id="backHome" class="large-button" href="/" role="button" aria-label="Back to home">Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        const prepositionQuestions = [
+            { question: '"in" is used for enclosed spaces, time periods, months/years, etc. Example: "The book is in the drawer" or "I was born in 1995." Can you make your own sentence with "in"?', preposition: 'in' },
+            { question: '"on" is used for days/dates, surfaces, and devices. Example: "The keys are on the table" or "We will meet on Monday." Can you make your own sentence with "on"?', preposition: 'on' },
+            { question: '\"at\" is used for specific times, precise locations, and events. Example: "Let\'s meet at 6 PM" or "She is waiting at the bus stop." Can you make your own sentence with "at"?', preposition: 'at' }
+        ];
+        const prepositionCycle = ['in','on','at','by','to','for','from','with','about','over','under','between','among'];
+        let cycleIndex = 0;
+        let currentIndex = 0; let recognition; let isRecording = false; let hasStarted = false; let currentAudio = null;
+
+        function updateStatus(message, type = 'ready') {
+            const statusDisplay = document.getElementById('statusDisplay');
+            statusDisplay.textContent = message;
+            statusDisplay.className = `status-display ${type}`;
+        }
+        function stopAllAudio(){ if('speechSynthesis' in window){ speechSynthesis.cancel(); } if(currentAudio){ try{ currentAudio.pause(); currentAudio.currentTime=0; }catch(_){} currentAudio=null; } }
+        function speak(text, cb=null){
+            stopAllAudio();
+            if('speechSynthesis' in window){ const u=new SpeechSynthesisUtterance(text); const set=()=>{ const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith('en')); if(v) u.voice=v; u.rate=0.7; u.pitch=1; u.volume=1; if(cb) u.onend=cb; speechSynthesis.speak(u);}; if(speechSynthesis.getVoices().length===0){ speechSynthesis.addEventListener('voiceschanged', set,{once:true}); } else { set(); } } else if(cb){ setTimeout(cb, 1000); }
+        }
+        function loadQuestion(){ const q=prepositionQuestions[currentIndex]; document.getElementById('questionNumber').textContent = currentIndex+1; document.getElementById('questionDisplay').textContent=q.question; document.getElementById('userAnswer').value=''; document.getElementById('audioControls').innerHTML=''; if(q.preposition){ const idx = prepositionCycle.indexOf(q.preposition); if(idx>=0) cycleIndex = (idx+1) % prepositionCycle.length; } if(hasStarted){ setTimeout(()=>{ readQuestion(); },500); } }
+        function readQuestion(){ const q=prepositionQuestions[currentIndex].question; updateStatus('Listening to question...','ready'); speak(q, ()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } }, 1000); }); }
+        function repeatQuestion(){ readQuestion(); }
+        function setupSpeechRecognition(){
+            if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){ updateStatus('Speech recognition not supported. Please type your answers.','ready'); return; }
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition; recognition = new SR(); recognition.continuous=true; recognition.interimResults=true; recognition.lang='en-US';
+            let finalTxt=''; let silenceTimer=null; const SILENCE_TIMEOUT=5000;
+            recognition.onstart=function(){ updateStatus('🎤 Listening... Speak your answer clearly','listening'); isRecording=true; finalTxt=''; document.getElementById('startButton').disabled=true; };
+            recognition.onresult=function(event){ let interim=''; for(let i=event.resultIndex;i<event.results.length;i++){ const t=event.results[i][0].transcript; if(event.results[i].isFinal){ finalTxt += t + ' '; } else { interim += t; } } const currentText=(finalTxt+interim); if(currentText.trim()){ updateStatus(`🎤 Hearing: "${currentText.trim()}"`,'listening'); } document.getElementById('userAnswer').value=(finalTxt+interim); if(silenceTimer) clearTimeout(silenceTimer); silenceTimer=setTimeout(()=>{ if(isRecording){ recognition.stop(); } }, SILENCE_TIMEOUT); };
+            recognition.onend=function(){ if(silenceTimer) clearTimeout(silenceTimer); isRecording=false; document.getElementById('startButton').disabled=false; if(finalTxt.trim().length>0){ document.getElementById('userAnswer').value=finalTxt.trim(); updateStatus('Processing your answer...','processing'); setTimeout(()=>{ submitAnswer(); },1000); } else { updateStatus('No speech detected. Click "Start Answering" to try again.','ready'); } };
+            recognition.onerror=function(){ isRecording=false; document.getElementById('startButton').disabled=false; updateStatus('Recording error. Click "Start Answering" to try again.','ready'); };
+        }
+        function startAnswering(){ if(!recognition){ updateStatus('Speech recognition not available.','ready'); return; } if(isRecording) return; try{ stopAllAudio(); recognition.start(); }catch(_){ updateStatus('Cannot start recording. Please try again.','ready'); } }
+
+        async function submitAnswer(){ const userAnswer=document.getElementById('userAnswer').value.trim(); if(!userAnswer){ updateStatus('No answer detected. Please try again.','ready'); return; } if(userAnswer.toLowerCase()==='repeat'){ const currentQ=prepositionQuestions[currentIndex]; speak(currentQ.question, ()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } },3000); }); return; } speak('Checking answer'); updateStatus('Getting AI feedback...','processing'); const currentQ=prepositionQuestions[currentIndex]; const nextPrep = prepositionCycle[cycleIndex]; try{ const response=await fetch('/api/check_preposition',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ question: currentQ.question, user_answer: userAnswer, next_preposition: nextPrep }) }); if(!response.ok){ updateStatus('Error getting feedback. Please try again.','ready'); return; } const data=await response.json(); const sanitize=(s)=>{ if(!s) return ''; s=String(s).trim(); if((s.startsWith('"')&&s.endsWith('"'))||(s.startsWith("'")&&s.endsWith("'"))) s=s.slice(1,-1); return s; }; const fbRaw=data.text; const nqRaw=data.next_question; const feedback=sanitize(fbRaw); const nextQuestion=sanitize(nqRaw); const audioBase64=data.audio_base64; if(!feedback){ updateStatus('No feedback received. Please try again.','ready'); return; } updateStatus('📢 ' + feedback, 'feedback'); if(nextQuestion){ const newQ={ question: nextQuestion, preposition: nextPrep }; prepositionQuestions[currentIndex]=newQ; document.getElementById('questionDisplay').textContent=nextQuestion; cycleIndex = (cycleIndex + 1) % prepositionCycle.length; }
+                 if(audioBase64){ try{ currentAudio=new Audio('data:audio/mp3;base64,' + audioBase64); currentAudio.play().then(()=>{ currentAudio.onended=()=>{ setTimeout(()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } },1000); },1000); }; }).catch(()=>{ const combined=data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : '')); speak(combined, ()=>{ setTimeout(()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } },1000); },1000); }); }); } catch(_){ const combined=data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : '')); speak(combined, ()=>{ setTimeout(()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } },1000); },1000); }); } } else { const combined=data.combined_text || (feedback + (nextQuestion ? `. Next question: ${nextQuestion}` : '')); speak(combined, ()=>{ setTimeout(()=>{ updateStatus('Say your answer now, or click "Start Answering"','ready'); setTimeout(()=>{ if(!isRecording){ startAnswering(); } },1000); },1000); }); } } catch(_){ updateStatus('Error getting feedback. Please try again.','ready'); } }
+
+        document.addEventListener('DOMContentLoaded', function(){ document.getElementById('totalQuestions').textContent=prepositionQuestions.length; loadQuestion(); setupSpeechRecognition(); const back=document.getElementById('backHome'); if(back){ back.addEventListener('click', function(e){ e.stopPropagation(); try{ stopAllAudio(); }catch(_){} try{ if(recognition && isRecording){ recognition.stop(); } }catch(_){} }); } document.getElementById('startButton').addEventListener('click', function(e){ e.stopPropagation(); startAnswering(); }); document.getElementById('repeatButton').addEventListener('click', function(e){ e.stopPropagation(); repeatQuestion(); }); document.addEventListener('click', function enableAndStart(){ if(!hasStarted){ hasStarted=true; if(typeof speechSynthesis!=='undefined'){ speechSynthesis.speak(new SpeechSynthesisUtterance('')); } setTimeout(()=>{ readQuestion(); },1000); document.removeEventListener('click', enableAndStart); } }, { once: true }); document.addEventListener('dblclick', function restartCurrentQuestion(){ if(recognition && isRecording){ recognition.stop(); } stopAllAudio(); hasStarted=true; document.getElementById('startButton').disabled=false; setTimeout(()=>{ readQuestion(); },200); updateStatus('Double-click detected - restarting current question...','ready'); }); });
+    </script>
+</body>
+</html>
+
+

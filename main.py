@@ -74,8 +74,18 @@ def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
 @app.route('/')
 def index():
     print("routing in / ")
-    """Serve the main HTML file"""
+    """Serve the accessible landing page"""
+    return send_from_directory('.', 'home.html')
+
+@app.route('/tense')
+def tense_page():
+    """Serve tense practice page"""
     return send_from_directory('.', 'grammar-simple.html')
+
+@app.route('/preposition')
+def preposition_page():
+    """Serve preposition practice page (simple placeholder)"""
+    return send_from_directory('.', 'preposition.html')
 
 @app.route('/api/weather',methods=['GET','POST'])
 def show_weather_report():
@@ -264,6 +274,113 @@ Return your response as valid JSON in this exact format:
             'details': str(e)
         }), 500
 
+@app.route('/api/check_preposition', methods=['POST'])
+def check_preposition():
+    """Check student's preposition answer and generate the next one."""
+    try:
+        if not CLAUDE_API_KEY or not OPENAI_API_KEY:
+            return jsonify({'error': 'Service not configured'}), 503
+
+        data = request.get_json() or {}
+        question = data.get('question')
+        user_answer = data.get('user_answer')
+        next_preposition = (data.get('next_preposition') or '').strip()
+        if not question or not user_answer:
+            return jsonify({'error': 'Both question and user_answer are required'}), 400
+
+        prompt = (
+            "You are a gentle English tutor for a visually impaired student.\n"
+            "Task: Evaluate the student's use of prepositions and give the next question.\n\n"
+            f"Question: \"{question}\"\n"
+            f"Student's answer: \"{user_answer}\"\n\n"
+            "Return JSON with keys: feedback and next_question.\n"
+            "IMPORTANT: next_question must follow this exact format: \n"
+            "\"\"<preposition>\" is used for <short rule>. Example: \"<example 1>\" or \"<example 2>\". Can you make your own sentence with \"<preposition>\"?\"\n"
+            "You MUST generate the next question USING EXACTLY this preposition (do not choose a different one):\n"
+            f"next_preposition: {next_preposition if next_preposition else '[choose a different one than current]'}\n"
+            "Keep sentences simple and practical."
+        )
+
+        model = 'claude-sonnet-4-20250514'
+        claude_url = 'https://api.anthropic.com/v1/messages'
+        headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': CLAUDE_API_KEY,
+            'anthropic-version': '2023-06-01'
+        }
+        payload = {
+            'model': model,
+            'max_tokens': 400,
+            'messages': [{'role': 'user', 'content': prompt}]
+        }
+
+        response = requests.post(claude_url, headers=headers, json=payload, timeout=30)
+        if response.status_code != 200:
+            return jsonify({'error': 'Claude API error', 'details': response.text}), response.status_code
+
+        resp_json = response.json()
+        text = None
+        if 'content' in resp_json and isinstance(resp_json['content'], list) and resp_json['content']:
+            text = resp_json['content'][0].get('text')
+        if not text:
+            return jsonify({'error': 'No response text from Claude'}), 500
+
+        import json as _json, re as _re
+        feedback = ''
+        next_question = ''
+        # Try to strip markdown code fences if present
+        cleaned = text.strip()
+        if cleaned.startswith('```'):
+            # remove the first and last code fences
+            cleaned = _re.sub(r'^```[a-zA-Z0-9_\-]*\n', '', cleaned)
+            cleaned = _re.sub(r'\n```\s*$', '', cleaned)
+        # Try direct JSON parse
+        try:
+            parsed = _json.loads(cleaned)
+            feedback = str(parsed.get('feedback', ''))
+            next_question = str(parsed.get('next_question', ''))
+        except Exception:
+            # Try to extract JSON object substring
+            m = _re.search(r'\{[\s\S]*\}', cleaned)
+            if m:
+                try:
+                    parsed = _json.loads(m.group(0))
+                    feedback = str(parsed.get('feedback', ''))
+                    next_question = str(parsed.get('next_question', ''))
+                except Exception:
+                    feedback = cleaned
+            else:
+                # Fallback: try to parse simple key lines
+                fb = _re.search(r'feedback\s*[:=-]\s*"?([^\n"]+)"?', cleaned, _re.IGNORECASE)
+                nq = _re.search(r'next_?question\s*[:=-]\s*"?([^\n"]+)"?', cleaned, _re.IGNORECASE)
+                if fb: feedback = fb.group(1)
+                if nq: next_question = nq.group(1)
+                if not feedback and not next_question:
+                    feedback = cleaned
+
+        # Sanitize to avoid stray brackets/quotes in TTS
+        def _sanitize(s: str) -> str:
+            s = s.strip()
+            if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                s = s[1:-1]
+            return s
+        feedback = _sanitize(feedback)
+        next_question = _sanitize(next_question)
+        combined_text = feedback + (f". Next question: {next_question}" if next_question else '')
+        try:
+            audio_base64 = text_to_speech_openai(combined_text)
+        except Exception:
+            audio_base64 = None
+
+        return jsonify({
+            'text': feedback,
+            'next_question': next_question,
+            'combined_text': combined_text,
+            'audio_base64': audio_base64
+        })
+    except Exception as e:
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -283,7 +400,7 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("🚀 Grammar app Python backend starting...")
-    print(f"📝 Open http://localhost:{PORT}/grammar-simple.html to use the app")
+    print(f"📝 Open http://localhost:{PORT}/ to use the app")
     print(f"🏥 Health check available at http://localhost:{PORT}/health")
     
     app.run(

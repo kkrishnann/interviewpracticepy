@@ -133,7 +133,7 @@
             Click anywhere to start, then just speak your answer. Say "Repeat" to repeat the question. Double click at any point to start questions again
         </div>
         
-        <div class="progress">
+        <div class="progress" style="display: none;">
             Question <span id="questionNumber">1</span> of <span id="totalQuestions">7</span>
         </div>
         
@@ -158,6 +158,12 @@
         <textarea id="userAnswer" class="hidden-answer" aria-label="Your spoken answer"></textarea>
         
         <div id="audioControls"></div>
+
+        <div style="margin-top: 24px;">
+            <a id="backHome" class="large-button" href="/" role="button" aria-label="Back to home">
+                Back to Home
+            </a>
+        </div>
     </div>
 
     <script>
@@ -563,6 +569,17 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
+            // Prevent global click-to-start when using Back to Home
+            const backBtn = document.getElementById('backHome');
+            if (backBtn) {
+                backBtn.addEventListener('click', function(e) {
+                    // Don't trigger global click-to-start
+                    e.stopPropagation();
+                    // Stop any ongoing audio or speech recognition before leaving
+                    try { stopAllAudio(); } catch (_) {}
+                    try { if (recognition && isRecording) { recognition.stop(); } } catch (_) {}
+                });
+            }
             document.getElementById('totalQuestions').textContent = grammarQuestions.length;
             loadQuestion();
             setupSpeechRecognition();

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grammar Practice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 24px;
+            background-color: #ffffff;
+            color: #000000;
+            line-height: 1.8;
+        }
+        h1 {
+            font-size: 32px;
+            text-align: center;
+        }
+        .card {
+            border: 3px solid #000;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .title {
+            font-size: 26px;
+            margin: 0 0 8px 0;
+        }
+        .desc {
+            font-size: 18px;
+            margin: 0 0 16px 0;
+        }
+        .button {
+            display: inline-block;
+            font-size: 20px;
+            padding: 14px 22px;
+            border: 3px solid #007bff;
+            background: #007bff;
+            color: #fff;
+            border-radius: 10px;
+            text-decoration: none;
+        }
+        .button:focus, .button:hover {
+            outline: 4px solid #000;
+            background: #0056b3;
+            border-color: #0056b3;
+        }
+        .sr-intro {
+            font-size: 18px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+    </style>
+    <meta name="color-scheme" content="light">
+</head>
+<body>
+    <h1 id="page-title">Grammar Practice</h1>
+    <p class="sr-intro" aria-live="polite">Choose a practice type below. Use Tab to move, Enter to select.</p>
+
+    <section class="card" aria-labelledby="tense-title">
+        <h2 id="tense-title" class="title">Tense Practice</h2>
+        <p class="desc">Practice using different verb tenses in sentences.</p>
+        <a class="button" href="/tense" role="button" aria-label="Start tense practice">Start Practice</a>
+    </section>
+
+    <section class="card" aria-labelledby="prep-title">
+        <h2 id="prep-title" class="title">Preposition Practice</h2>
+        <p class="desc">Learn when to use in, on, at, by and more.</p>
+        <a class="button" href="/preposition" role="button" aria-label="Start preposition practice">Start Practice</a>
+    </section>
+
+    <script>
+        // Move focus to page title on load for screen readers
+        window.addEventListener('DOMContentLoaded', function () {
+            const title = document.getElementById('page-title');
+            if (title && title.focus) {
+                title.setAttribute('tabindex', '-1');
+                title.focus();
+            }
+        });
+    </script>
+</body>
+</html>
+
+
