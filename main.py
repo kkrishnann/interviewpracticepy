@@ -75,7 +75,7 @@ def text_to_speech_openai(text, voice="nova", model="gpt-4o-mini-tts"):
 def index():
     print("routing in / ")
     """Serve the accessible landing page"""
-    return send_from_directory('.', 'home.html')
+    return send_from_directory('./static', 'home.html')
 
 @app.route('/tense')
 def tense_page():
@@ -85,12 +85,12 @@ def tense_page():
 @app.route('/preposition')
 def preposition_page():
     """Serve preposition practice page (simple placeholder)"""
-    return send_from_directory('.', 'preposition.html')
+    return send_from_directory('./static', 'preposition.html')
 
 @app.route('/grammar-simple.html')
 def grammar_simple_redirect():
     """Serve home.html for the old grammar-simple.html link"""
-    return send_from_directory('.', 'home.html')
+    return send_from_directory('./static', 'home.html')
 
 @app.route('/api/weather',methods=['GET','POST'])
 def show_weather_report():
