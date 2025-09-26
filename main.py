@@ -80,7 +80,7 @@ def index():
 @app.route('/tense')
 def tense_page():
     """Serve tense practice page"""
-    return send_from_directory('.', 'grammar-simple.html')
+    return send_from_directory('./static', 'grammar-simple.html')
 
 @app.route('/preposition')
 def preposition_page():
