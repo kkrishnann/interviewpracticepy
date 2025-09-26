@@ -87,6 +87,11 @@ def preposition_page():
     """Serve preposition practice page (simple placeholder)"""
     return send_from_directory('.', 'preposition.html')
 
+@app.route('/grammar-simple.html')
+def grammar_simple_redirect():
+    """Serve home.html for the old grammar-simple.html link"""
+    return send_from_directory('.', 'home.html')
+
 @app.route('/api/weather',methods=['GET','POST'])
 def show_weather_report():
     if request.method == 'POST':
